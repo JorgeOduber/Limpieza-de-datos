@@ -1,0 +1,147 @@
+---
+title: "Limpieza y manipulación de datos"
+author: "Jorge Oduber"
+date: "2023-09-25"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+ Ejemplo de limpieza de datos con datos propios. 
+ La idea del presente ejercicio es realizar manipulación y limpieza de datos, pasando por creación de variables, hasta la obtención de una base de datos con la cual posteriormente podemos hacer visualización de datos...
+
+
+Carga de paquetes y lectura de archivo en formato excel.
+Tenemos dos variables, Teléfono (no todos tienen la misma cantidad de caracteres) y Región (No todos tienen Región asignada).
+
+
+```{r  }
+
+library(readxl)
+library(magrittr)
+library(dbplyr)
+library(tidyverse)
+PORTFOLIO_EXAMPLE <-read_excel("C:/Users/USUARIO/OneDrive/Escritorio/Portfolio/Cleaning Data/PORTFOLIO_EXAMPLE.xlsx")
+View(PORTFOLIO_EXAMPLE)
+Data <- data.frame(PORTFOLIO_EXAMPLE)
+
+```
+
+
+Observamos la frecuencia a través de :Resumen de casos de la columna "Region".
+
+```{r  }
+
+resumen_region <- table(Data$REGION)
+
+print(resumen_region)
+```
+
+ Eliminar valores SIN REGION de la columna Region.
+```{r   }
+
+Df <- Data[!(Data$REGION == "SIN REGION" ),]
+``` 
+
+```{r   }
+Resumen_Df <- table(Df$REGION)
+print(Resumen_Df)
+```
+
+Eliminar filas con celdas vacías en las columnas "Region" y "Telefono".
+```{r   }
+
+Df <- Df[!(Df$REGION == "" | is.na(Df$REGION) | is.na(Df$TELEFONO)),]
+```
+
+Utilizar la función ifelse para asignar a la variable "Estado" según el valor de "Region" (Se tomaron los principales Estados de las Regiones, solo para efectos de este ejercicio).
+```{r   }
+
+Df$Estado <- ifelse(Df$REGION %in% c("ANDINA", "LOS ANDES"), "TACHIRA",
+             ifelse(Df$REGION %in% c("CAPITAL", "GRAN CARACAS"), "CARACAS",
+             ifelse(Df$REGION %in% c("CENTRAL", "CENTRO"), "CARABOBO",
+             ifelse(Df$REGION %in% c("CENTRO-LLANO", "CENTRO-LLANOS", "CENTRO LLANO", "CENTRO LLANOS", "LLANERA"), "GUÁRICO",
+             ifelse(Df$REGION %in% c("CENTRO/OCCIDENTE", "CENTRO OCCIDENTE", "CENTROOCCIDENTAL"), "LARA",
+             ifelse(Df$REGION == "GUAYANA", "ANZOÁTEGUI",
+             ifelse(Df$REGION %in% c("OCCIDENTE", "ZULIANA"), "ZULIA",
+             ifelse(Df$REGION %in% c("ORIENTAL", "ORIENTE", "SUR"), "ANZOÁTEGUI", NA))))))))
+
+head(Df)
+```
+
+Contar la cantidad de caracteres de la variable "TELEFONO", creación de la variable "Largo".
+```{r   }
+
+Df$Largo <- nchar(Df$TELEFONO)
+```
+
+Resumen de casos de la variable Largo.
+```{r}
+table(Df$Estado, Df$Largo)
+```
+
+Filtro para obtener solo aquellos teléfonos con datos faltantes 9 o 10, esto porque según los números telefónicos de Venezuela deben contener 11 caracteres, si Largo es = 9, faltarían dos dígitos (04) y si Largo = 10, faltaría 1 caracter (0). 
+```{r}
+Df <- subset(Df, Largo > 8)
+table(Df$Largo)
+```
+
+Asignación y creación de variable Num_tlf2 para luego unir con variable Teléfono y tener una variable con 11 caracteres.
+```{r}
+Df$Num_tlf2 <- ifelse(Df$Largo == 9, "04", 0)
+table(Df$Num_tlf2)
+```
+
+
+Creación de variable Teléfono final, uniendo las variables Teléfono y Num_tlf2.
+```{r}
+Df$Tlf_final <- paste(Df$Num_tlf2,Df$TELEFONO,sep="")
+head(Df$Tlf_final)
+```
+
+
+Creación de la variable operadora prestadora de servicio telefónico, a través de los primeros 4 caracteres de la variable operadora.
+```{r}
+Df$Operadora <- substr(Df$Tlf_final,1,4)
+head(Df$Operadora)
+```
+
+Nombre de la operadora
+```{r}
+Df$Nomb_Operadora <- ifelse(Df$Operadora %in% c("0414", "0424"), "Movistar", ifelse(Df$Operadora %in% c("0426", "0416"), "Movilnet", "Digitel"))                      
+table(Df$Nomb_Operadora)
+```
+
+Obtención de nueva variable Telefono final.
+```{r}
+Df$Telefono_final <- paste(Df$Operadora,"-",Df$TELEFONO,sep="")
+head(Df$Telefono_final)
+```
+
+
+Obtención de muestra (nueva tabla) con 28.000 casos, donde la operadora sea Movistar, esto para calibración de datos.
+```{r}
+Muestra_Movistar <- Df %>%
+  filter(Nomb_Operadora == "Movistar") %>%
+  sample_n(28000, replace = TRUE)
+table(Muestra_Movistar$Operadora)
+```
+
+Creación de (nueva tabla) Muestra resto, para posterior unión con muestra Movistar.
+```{r}
+Muestra_Resto <- Df %>%
+  filter(Nomb_Operadora != "Movistar") 
+  
+table(Muestra_Resto$Nomb_Operadora)
+```
+
+Creación de tabla final con la unión de Muestra Movistar y Muestra Resto. 
+```{r}
+Tabla_final <- rbind(Muestra_Movistar,Muestra_Resto)
+head(Tabla_final)
+table(Tabla_final$Nomb_Operadora)
+```
